@@ -136,6 +136,8 @@ class TenhouIterableDataset(IterableDataset):
                     if self.transform:
                         features, labels = self.transform((features, labels))
                     yield (features, labels)
+            except GeneratorExit:
+                raise  # propagate
             except:
                 continue
 
@@ -144,4 +146,7 @@ class TenhouIterableDataset(IterableDataset):
         if self.shuffle:
             random.shuffle(file_list)
         for data_file in file_list:
-            yield from self._sample_generator_for_file(data_file)
+            try:
+                yield from self._sample_generator_for_file(data_file)
+            except GeneratorExit:
+                return  # next file
