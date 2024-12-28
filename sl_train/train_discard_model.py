@@ -14,16 +14,22 @@ import wandb
 import tqdm
 
 
+def make_loader(dataset: TenhouIterableDataset, collate_fn):
+    return DataLoader(
+        dataset,
+        batch_size=512,
+        num_workers=4,
+        collate_fn=collate_fn,
+        pin_memory=True,
+        prefetch_factor=10
+    )
+
 @torch.no_grad()
-def model_test(model, dataset: TenhouDataset):
+def model_test(model, test_loader, fast=False):
     acc = 0
     total = 0
-    length = len(dataset)
-    while len(dataset) > 0:
-        data = dataset()
-        if len(data) == 0:
-            break
-        features, labels = process_data(data, label_trans=lambda x: x // 4)
+    steps, step = 256 if fast else -1, 0
+    for features, labels in (pbar := tqdm.tqdm(test_loader)):
         features, labels = features.to(device), labels.to(device)
         output = model(features).softmax(1)
         available = features[:, :4].sum(1) != 0
@@ -32,8 +38,11 @@ def model_test(model, dataset: TenhouDataset):
         correct = (pred == labels).sum()
         acc += correct
         total += len(labels)
-        print(f"Testing {length - len(dataset)} / {length} acc: {correct.item() / len(labels):.3f}".center(50, '-'), end='\r')
-    dataset.reset()
+        step += 1
+        if step % 100 == 0:
+            pbar.set_postfix_str("acc {:.2f}".format(acc/total))
+        if step == steps:
+            break
     return acc / total
 
 
@@ -64,21 +73,19 @@ os.makedirs(f'output/{mode}-model/checkpoints', exist_ok=True)
 max_acc = 0
 global_step = 0
 # patched dataset and loader
-dataset = TenhouIterableDataset(
-    data_dir='data',
-    exclude_files=set(test_set.data_files),  # exclude testing set
-    mode='discard',
-    target_length=2,
-    shuffle=True
-)
-train_loader = DataLoader(
-    dataset,
-    batch_size=512,
-    num_workers=4,
-    collate_fn=collate_fn_discard,
-    pin_memory=True,
-    prefetch_factor=10
-)
+dataset, test_dataset = [
+    TenhouIterableDataset(
+        data_dir='data',
+        exclude_files=exclusions,  # exclude testing set
+        mode='discard',
+        target_length=2,
+        shuffle=True
+    )
+    for exclusions in [set(test_set.data_files), set(train_set.data_files)]
+]
+train_loader = make_loader(dataset, collate_fn_discard)
+test_loader = make_loader(test_dataset, collate_fn_discard)
+
 for epoch in range(epochs):
     for features, labels in tqdm.tqdm(train_loader):
         features, labels = features.to(device, non_blocking=True), labels.to(device, non_blocking=True)
@@ -98,7 +105,7 @@ for epoch in range(epochs):
 
     torch.save({"state_dict": model.state_dict(), "num_layers": num_layers, "in_channels": in_channels}, f'output/{mode}-model/checkpoints/epoch_{epoch + 1}.pt')
     model.eval()
-    acc = model_test(model, test_set)
+    acc = model_test(model, test_loader)
     if acc > max_acc:
         max_acc = acc
         torch.save({"state_dict": model.state_dict(), "num_layers": num_layers, "in_channels": in_channels}, f'output/{mode}-model/checkpoints/best.pt')
