@@ -62,6 +62,7 @@ train_set.data_files, test_set.data_files = train_set.data_files[:len_train], tr
 num_layers = args.num_layers
 in_channels = 291
 model = DiscardModel(num_layers=num_layers, in_channels=in_channels)
+model = torch.compile(model)  # speed up training by ~13% in default setup
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device)
 optim = Adam(model.parameters())
@@ -87,7 +88,7 @@ train_loader = make_loader(dataset, collate_fn_discard)
 test_loader = make_loader(test_dataset, collate_fn_discard)
 
 for epoch in range(epochs):
-    for features, labels in tqdm.tqdm(train_loader):
+    for features, labels in (pbar := tqdm.tqdm(train_loader)):
         features, labels = features.to(device, non_blocking=True), labels.to(device, non_blocking=True)
         output = model(features)
         loss = loss_fcn(output, labels)
@@ -95,7 +96,8 @@ for epoch in range(epochs):
         loss.backward()
         optim.step()
         global_step += 1
-        print(f"Epoch-{epoch + 1}: {len_train - len(train_set)} / {len_train} loss={loss.item():.3f}".center(50, '-'), end='\r')
+        if global_step % 1000 == 0:
+            pbar.set_postfix_str(f"epoch={epoch+1} loss={loss.item():.3f} max_acc={max_acc:.3f}")
         experiment.log({
             'train loss': loss.item(),
             'epoch': epoch + 1
