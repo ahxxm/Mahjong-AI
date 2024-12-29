@@ -19,9 +19,7 @@ def make_loader(dataset: TenhouIterableDataset, collate_fn):
         dataset,
         batch_size=512,
         num_workers=4,
-        collate_fn=collate_fn,
-        pin_memory=True,
-        prefetch_factor=10
+        collate_fn=collate_fn
     )
 
 @torch.no_grad()
