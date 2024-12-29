@@ -126,8 +126,8 @@ class TenhouIterableDataset(IterableDataset):
             try:
                 features, labels = parse_func(target=target)
                 if isinstance(features, list):
-                    pairs = list(zip(features, labels))
-                    # random.shuffle(pairs)  # files shuffled
+                    pairs = zip(features, labels)
+                    # random.shuffle(pairs)  # files shuffled, skip building list to same some memory
                     for (f, lb) in pairs:
                         if self.transform:
                             f, lb = self.transform((f, lb))
