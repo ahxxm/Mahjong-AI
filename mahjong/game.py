@@ -427,7 +427,7 @@ class MahjongGame(object):
         riichi_feature = self.get_reach_feature()  # 四家的立直情况
         oya_feature = self.get_category_feature(self.oya, 4)  # 亲家
         features = np.concatenate([
-            hand_feature,  # 16
+            hand_feature,  # 4
             # wall_feature,  # 70
             seat_feature,  # 4
             rank_feature,  # 4
@@ -444,7 +444,7 @@ class MahjongGame(object):
             score_feature,  # 9 * 4
             riichi_feature,  # 4
             oya_feature  # 4
-        ], axis=0)  # 373
+        ], axis=0)  # 291
         return features
 
     def get_game_feature(self, round_score, target_score):
